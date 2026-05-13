@@ -37,7 +37,7 @@ cubes:
         type: time
 
       - name: log_month
-        sql: "DATE_TRUNC('month', {CUBE}.log_date)"
+        sql: "from_iso8601_timestamp(CAST(DATE_TRUNC('month', {CUBE}.log_date) AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       # Real columns in std_ingame_user_active_daily are namespaced with

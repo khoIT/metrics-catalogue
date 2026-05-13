@@ -34,7 +34,7 @@ services:
     container_name: ballistar_cubestore
     environment:
       CUBESTORE_DATA_DIR: /cube/data
-      CUBESTORE_SERVER_NAME: cubestore:9999
+      CUBESTORE_PORT: 9999
       CUBESTORE_META_PORT: 9999
     volumes:
       - cubestore_data:/cube/data

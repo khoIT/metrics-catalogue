@@ -54,7 +54,7 @@ cubes:
         type: time
 
       - name: recharge_date
-        sql: log_date
+        sql: "from_iso8601_timestamp(CAST({CUBE}.log_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: log_month
