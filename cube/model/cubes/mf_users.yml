@@ -47,7 +47,7 @@ cubes:
 
       # ---- acquisition ---------------------------------------------------
       - name: install_date
-        sql: "CAST({CUBE}.install_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.install_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
         description: Attributed install date (from MMP). NULL for organic / pre-attribution users.
 
@@ -83,7 +83,7 @@ cubes:
         type: string
 
       - name: first_login_date
-        sql: "CAST({CUBE}.sdk_first_login_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.sdk_first_login_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: first_login_month
@@ -91,7 +91,7 @@ cubes:
         type: string
 
       - name: last_login_date
-        sql: "CAST({CUBE}.sdk_last_login_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.sdk_last_login_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: first_login_channel
@@ -116,11 +116,11 @@ cubes:
 
       # ---- ingame activity state ----------------------------------------
       - name: first_active_date
-        sql: "CAST({CUBE}.ingame_first_active_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.ingame_first_active_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: last_active_date
-        sql: "CAST({CUBE}.ingame_last_active_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.ingame_last_active_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: total_active_days
@@ -146,11 +146,11 @@ cubes:
 
       # ---- ingame recharge state ----------------------------------------
       - name: first_recharge_date
-        sql: "CAST({CUBE}.ingame_first_recharge_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.ingame_first_recharge_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: last_recharge_date
-        sql: "CAST({CUBE}.ingame_last_recharge_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.ingame_last_recharge_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: ltv_vnd

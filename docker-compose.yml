@@ -30,11 +30,12 @@ services:
     restart: unless-stopped
 
   cubestore:
-    image: cubejs/cubestore:latest
-    platform: linux/amd64
+    image: cubejs/cubestore:arm64v8
     container_name: ballistar_cubestore
     environment:
       CUBESTORE_DATA_DIR: /cube/data
+      CUBESTORE_SERVER_NAME: cubestore:9999
+      CUBESTORE_META_PORT: 9999
     volumes:
       - cubestore_data:/cube/data
     restart: unless-stopped

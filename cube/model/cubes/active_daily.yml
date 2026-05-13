@@ -33,7 +33,7 @@ cubes:
         type: string
 
       - name: log_date
-        sql: "CAST({CUBE}.log_date AS TIMESTAMP)"
+        sql: "from_iso8601_timestamp(CAST({CUBE}.log_date AS VARCHAR) || 'T00:00:00Z')"
         type: time
 
       - name: log_month
