@@ -90,5 +90,11 @@ assets/
 # External repos for study/reference
 external/
 
+# Reference assets bundled with plans/reports (not source of truth)
+plans/reports/reference/
+
+# Editor swap files
+*.swp
+
 # Git worktrees (local development only)
 worktrees/
