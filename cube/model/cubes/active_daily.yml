@@ -138,3 +138,27 @@ cubes:
 
       - name: yesterday
         sql: "{CUBE}.log_date = CURRENT_DATE - INTERVAL '1' DAY"
+
+    # Cross-cube rollup: serves dau by (country, payer_tier, day) without
+    # scanning std_ingame_user_active_daily. Foreign dims come from mf_users
+    # via the declared many_to_one join. count_distinct_approx stores HLL
+    # sketches in the rollup, so the same day-grain rollup also serves
+    # week/month/quarter/year queries via sketch merge.
+    pre_aggregations:
+      - name: dau_by_country_payer_daily
+        type: rollup
+        measures:
+          - dau
+        dimensions:
+          - mf_users.country
+          - mf_users.payer_tier
+        time_dimension: log_date
+        granularity: day
+        partition_granularity: month
+        refresh_key:
+          every: 1 hour
+          incremental: true
+        build_range_start:
+          sql: "SELECT DATE '2024-01-01'"
+        build_range_end:
+          sql: "SELECT CURRENT_DATE"
