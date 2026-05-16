@@ -23,8 +23,17 @@ services:
       - "15432:15432"   # SQL API (Postgres wire protocol)
     env_file:
       - .env
+    # Patch the Trino driver at startup to strip `SET SESSION
+    # query_max_run_time` (Trino role lacks SET_SYSTEM_SESSION_PROPERTY).
+    # See cube-entrypoint-patched.sh for rationale and the long-term fix.
+    # NOTE: Setting `entrypoint:` in Compose clears the image's default CMD,
+    # so we must re-declare `command:` (image default is `cubejs server`),
+    # otherwise docker-entrypoint.sh runs with no args and exits 0 silently.
+    entrypoint: ["/usr/local/bin/cube-entrypoint-patched.sh"]
+    command: ["cubejs", "server"]
     volumes:
       - ./cube/model:/cube/conf/model:ro
+      - ./cube-entrypoint-patched.sh:/usr/local/bin/cube-entrypoint-patched.sh:ro
     depends_on:
       - cubestore
     restart: unless-stopped
