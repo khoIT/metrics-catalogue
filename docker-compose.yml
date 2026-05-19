@@ -39,8 +39,13 @@ services:
     restart: unless-stopped
 
   cubestore:
-    image: cubejs/cubestore:latest
-    platform: linux/amd64
+    # `cubejs/cubestore:latest` is NOT a multi-arch manifest — Cube ships
+    # separate tags per arch. Pick the matching one in your local .env:
+    #   Apple Silicon (M-series):   CUBESTORE_TAG=v1.6.46-arm64v8
+    #   x86-64 (Win / Linux / Intel Mac): leave unset — defaults to v1.6.46
+    # Running the amd64 tag on arm64 under Colima/Docker-Desktop emulation
+    # wedges the Rust binary silently (no logs, no listening ports).
+    image: cubejs/cubestore:${CUBESTORE_TAG:-v1.6.46}
     container_name: ballistar_cubestore
     environment:
       CUBESTORE_DATA_DIR: /cube/data
