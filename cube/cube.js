@@ -35,6 +35,19 @@ const SUPPORTED_GAMES = Object.keys(GAME_SCHEMA);
 // (and future accessPolicy rules) can recognise as "system, not human".
 const REFRESH_ROLE = '__refresh__';
 
+// In dev mode (CUBEJS_DEV_MODE=true) Cube bypasses checkAuth, so the
+// downstream hooks receive an empty securityContext. We fall back to a
+// configurable default game so the Playground / SQL API stay usable without
+// minting a JWT for every request. Production runs with dev mode off, so
+// checkAuth always populates securityContext.game and this fallback is unused.
+function gameFor(securityContext) {
+  return (
+    (securityContext && securityContext.game) ||
+    process.env.CUBEJS_DEFAULT_GAME ||
+    'ballistar'
+  );
+}
+
 function buildSecurityContext(payload, access) {
   return {
     userId:       payload.userId,
@@ -47,18 +60,37 @@ function buildSecurityContext(payload, access) {
 module.exports = {
   // 1. Authenticate every incoming request: verify JWT, resolve access from
   //    the auth DB, enforce that the requested game is allowed for this user.
+  //
+  //    Dev mode (CUBEJS_DEV_MODE=true) is permissive: a missing header, the
+  //    bare API secret (Playground default), or a JWT with no game claim all
+  //    resolve to an anonymous context. Downstream hooks then use the default
+  //    game from gameFor(). Production runs with dev mode off and is strict.
   checkAuth: async (req, auth) => {
+    const isDev = process.env.CUBEJS_DEV_MODE === 'true';
+
     if (!auth) {
+      if (isDev) { req.securityContext = {}; return; }
       throw new Error('Authorization header missing');
     }
-    const payload = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
-    const game = payload.game;
-    if (!SUPPORTED_GAMES.includes(game)) {
-      throw new Error(`Unknown or missing game claim: ${game}`);
+
+    let payload;
+    try {
+      payload = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
+    } catch (e) {
+      if (isDev) { req.securityContext = {}; return; }
+      throw e;
+    }
+
+    if (!payload.game) {
+      if (isDev) { req.securityContext = {}; return; }
+      throw new Error('Missing game claim');
+    }
+    if (!SUPPORTED_GAMES.includes(payload.game)) {
+      throw new Error(`Unknown game claim: ${payload.game}`);
     }
     const access = await getUserAccess(payload.userId);
-    if (!access.allowedGames.includes(game)) {
-      throw new Error(`User ${payload.userId} not allowed for game ${game}`);
+    if (!access.allowedGames.includes(payload.game)) {
+      throw new Error(`User ${payload.userId} not allowed for game ${payload.game}`);
     }
     req.securityContext = buildSecurityContext(payload, access);
   },
@@ -66,12 +98,12 @@ module.exports = {
   // 2. Per-tenant compile cache. Cube keeps one compiled schema per appId,
   //    so changes in one tenant's metadata don't invalidate the others.
   contextToAppId: ({ securityContext }) =>
-    `cube_${securityContext.game}`,
+    `cube_${gameFor(securityContext)}`,
 
   // 3. Per-tenant orchestrator. Pre-aggregation storage in Cube Store is
   //    keyed by orchestratorId, so each game gets its own rollup namespace.
   contextToOrchestratorId: ({ securityContext }) =>
-    `orch_${securityContext.game}`,
+    `orch_${gameFor(securityContext)}`,
 
   // 4. Per-tenant Trino driver. Same catalog, swap the schema. Existing
   //    cube YAMLs use bare sql_table values, so this is the only place the
@@ -83,7 +115,7 @@ module.exports = {
     user:    process.env.CUBEJS_DB_USER,
     password: process.env.CUBEJS_DB_PASS,
     catalog: process.env.CUBEJS_DB_PRESTO_CATALOG,
-    schema:  GAME_SCHEMA[securityContext.game],
+    schema:  GAME_SCHEMA[gameFor(securityContext)],
     ssl:     process.env.CUBEJS_DB_SSL === 'true',
   }),
 
@@ -106,7 +138,7 @@ module.exports = {
   //    Missing dirs are tolerated (a game without views just returns no view files).
   repositoryFactory: ({ securityContext }) => ({
     dataSchemaFiles: async () => {
-      const game = securityContext.game;
+      const game = gameFor(securityContext);
       const files = [];
       for (const kind of ['cubes', 'views']) {
         const dir = path.join(MODEL_ROOT, kind, game);
