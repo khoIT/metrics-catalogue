@@ -21,9 +21,19 @@
     "allowedGames": ["jus"],
     "roles": ["analyst"]
   },
+  "1005": {
+    "name": "muaw-analyst",
+    "allowedGames": ["muaw"],
+    "roles": ["analyst"]
+  },
+  "1006": {
+    "name": "pubg-analyst",
+    "allowedGames": ["pubg"],
+    "roles": ["analyst"]
+  },
   "9001": {
     "name": "cross-game-admin",
-    "allowedGames": ["ballistar", "cfm", "ptg", "jus"],
+    "allowedGames": ["ballistar", "cfm", "ptg", "jus", "muaw", "pubg"],
     "roles": ["admin"]
   },
   "9999": {

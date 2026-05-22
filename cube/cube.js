@@ -6,10 +6,16 @@
 // schema. Compile cache and pre-aggregation storage are namespaced per game.
 //
 // JWT shape (HS256, signed with CUBEJS_API_SECRET):
-//   { userId: <number|string>, game: "ballistar"|"cfm"|"ptg"|"jus", iat: ... }
+//   { userId: <number|string>, game: "ballistar"|"cfm"|"ptg"|"jus"|"muaw"|"pubg", iat: ... }
 
-const jwt = require('jsonwebtoken');
+const fs   = require('fs');
+const path = require('path');
+const jwt  = require('jsonwebtoken');
 const { getUserAccess } = require('./auth-db');
+
+// Where the model files live inside the container. Each tenant loads only its
+// own subdir, so cube definitions never leak across games.
+const MODEL_ROOT = process.env.CUBEJS_MODEL_ROOT || '/cube/conf/model';
 
 // Game key (used in JWT + URLs) -> Trino schema under the game_integration catalog.
 // Schema names are stable and live in Trino; only this map ever needs to grow.
@@ -18,6 +24,8 @@ const GAME_SCHEMA = {
   cfm:       'cfm_vn',
   ptg:       'ptg',
   jus:       'jus_vn',
+  muaw:      'muaw',
+  pubg:      'pubgm',
 };
 
 const SUPPORTED_GAMES = Object.keys(GAME_SCHEMA);
@@ -92,7 +100,33 @@ module.exports = {
       },
     })),
 
-  // 6. RLS extension point. Today this is a pass-through; per-user / per-role
+  // 6. Per-tenant model loader. Each game has its own subdir under
+  //    model/cubes/<game>/ and model/views/<game>/. We read both at request
+  //    time so adding a game = creating dirs + dropping YAML in, no code change.
+  //    Missing dirs are tolerated (a game without views just returns no view files).
+  repositoryFactory: ({ securityContext }) => ({
+    dataSchemaFiles: async () => {
+      const game = securityContext.game;
+      const files = [];
+      for (const kind of ['cubes', 'views']) {
+        const dir = path.join(MODEL_ROOT, kind, game);
+        let names;
+        try {
+          names = await fs.promises.readdir(dir);
+        } catch (e) {
+          if (e.code === 'ENOENT') continue;
+          throw e;
+        }
+        for (const name of names.filter((n) => n.endsWith('.yml') || n.endsWith('.yaml') || n.endsWith('.js'))) {
+          const content = await fs.promises.readFile(path.join(dir, name), 'utf8');
+          files.push({ fileName: `${kind}/${game}/${name}`, content });
+        }
+      }
+      return files;
+    },
+  }),
+
+  // 7. RLS extension point. Today this is a pass-through; per-user / per-role
   //    row filters get added here as the auth DB grows. Pattern:
   //
   //      if (!securityContext.roles.includes('admin')) {
