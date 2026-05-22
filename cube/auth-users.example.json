@@ -1,0 +1,34 @@
+{
+  "_comment": "Dev seed for auth-db.js. Copy to auth-users.json (gitignored). Keys are user IDs; values list allowed games and optional roles.",
+
+  "1001": {
+    "name": "ballistar-analyst",
+    "allowedGames": ["ballistar"],
+    "roles": ["analyst"]
+  },
+  "1002": {
+    "name": "cfm-analyst",
+    "allowedGames": ["cfm"],
+    "roles": ["analyst"]
+  },
+  "1003": {
+    "name": "ptg-analyst",
+    "allowedGames": ["ptg"],
+    "roles": ["analyst"]
+  },
+  "1004": {
+    "name": "jus-analyst",
+    "allowedGames": ["jus"],
+    "roles": ["analyst"]
+  },
+  "9001": {
+    "name": "cross-game-admin",
+    "allowedGames": ["ballistar", "cfm", "ptg", "jus"],
+    "roles": ["admin"]
+  },
+  "9999": {
+    "name": "no-access-user",
+    "allowedGames": [],
+    "roles": []
+  }
+}

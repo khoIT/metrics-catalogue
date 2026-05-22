@@ -32,7 +32,10 @@ services:
     entrypoint: ["/usr/local/bin/cube-entrypoint-patched.sh"]
     command: ["cubejs", "server"]
     volumes:
-      - ./cube/model:/cube/conf/model:ro
+      # Mount the whole cube/ tree at /cube/conf so Cube auto-loads cube.js,
+      # auth-db.js, auth-users.json, and model/ in one shot. Read-only so the
+      # container can't mutate auth state.
+      - ./cube:/cube/conf:ro
       - ./cube-entrypoint-patched.sh:/usr/local/bin/cube-entrypoint-patched.sh:ro
     depends_on:
       - cubestore

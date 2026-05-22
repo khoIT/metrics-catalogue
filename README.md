@@ -33,6 +33,9 @@ ballistar-cube-semantic/
 ├── docker-compose.yml          # Cube API + Cube Store router/worker
 ├── .env.example                # Trino + Cube config (cp to .env)
 ├── cube/
+│   ├── cube.js                      # Multi-tenant routing + JWT auth hooks
+│   ├── auth-db.js                   # Pluggable allowedGames lookup (dev: JSON)
+│   ├── auth-users.example.json      # Seed for the dev auth lookup
 │   └── model/
 │       ├── cubes/
 │       │   ├── mf_users.yml         # Master profile feature store (1 row/user)
@@ -41,9 +44,11 @@ ballistar-cube-semantic/
 │       └── views/
 │           └── user_360.yml         # Entity-first view + 2 metric views
 └── examples/
+    ├── 00_mint_jwt.sh               # Helper: mint a JWT for <userId> <game>
     ├── 01_test_rest_api.sh          # 7 curl-based smoke tests
     ├── 02_test_sql_api.sql          # SQL API equivalents
-    └── 03_segment_dsl_compiler.py   # LLM-friendly DSL → Cube compiler demo
+    ├── 03_segment_dsl_compiler.py   # LLM-friendly DSL → Cube compiler demo
+    └── 05_test_multi_tenant.sh      # Per-game smoke + cross-game deny check
 ```
 
 ## Design choices
@@ -66,19 +71,61 @@ ballistar-cube-semantic/
 # 1. Configure
 cp .env.example .env
 # edit .env — fill in CUBEJS_DB_HOST, CUBEJS_DB_USER, CUBEJS_DB_PASS,
-# CUBEJS_DB_PRESTO_CATALOG, CUBEJS_DB_SCHEMA for your Trino cluster.
+# CUBEJS_DB_PRESTO_CATALOG for your Trino cluster. CUBEJS_DB_SCHEMA is
+# intentionally NOT set — schema is resolved per-tenant in cube/cube.js.
 
-# 2. Adjust schema for any column names that differ from the assumptions in
-#    cube/model/cubes/active_daily.yml and recharge.yml — the mf_users.yml
-#    is mapped exactly to the document you provided.
+# 2. Seed the multi-tenant auth lookup
+cp cube/auth-users.example.json cube/auth-users.json
+# edit cube/auth-users.json to grant real users access to specific games
 
-# 3. Spin up
+# 3. Adjust schema for any column names that differ from the assumptions in
+#    cube/model/cubes/active_daily.yml and recharge.yml.
+
+# 4. Spin up
 docker compose up -d
 docker compose logs -f cube_api    # watch for "API server is listening"
 
-# 4. Verify
-open http://localhost:4000          # Cube Playground (visual query builder)
+# 5. Verify
+bash examples/05_test_multi_tenant.sh   # 4 games + cross-game deny check
+open http://localhost:4000              # Cube Playground (needs a JWT now)
 ```
+
+## Multi-tenant (game_integration)
+
+This stack serves four games from one `game_integration` Trino catalog:
+`ballistar` → `ballistar_vn`, `cfm` → `cfm_vn`, `ptg` → `ptg`, `jus` → `jus_vn`.
+Routing happens per-request via JWT — there is **no global `CUBEJS_DB_SCHEMA`**.
+
+**JWT shape** (HS256, signed with `CUBEJS_API_SECRET`):
+
+```json
+{ "userId": 1001, "game": "ballistar" }
+```
+
+Mint one for dev: `bash examples/00_mint_jwt.sh 1001 ballistar`.
+
+**Auth flow** (`cube/cube.js` → `checkAuth`):
+1. Verify signature.
+2. Look up `allowedGames` from the auth DB (`cube/auth-db.js`, file-backed in dev).
+3. Reject if the requested `game` is not in `allowedGames`.
+4. Populate `securityContext = { userId, game, allowedGames, roles }`.
+
+**Per-tenant isolation:**
+- `contextToAppId` / `contextToOrchestratorId` namespace by `game` →
+  compile cache and pre-aggregations never leak across tenants.
+- `driverFactory` returns a Trino driver pointed at the right schema.
+- `scheduledRefreshContexts` enumerates all four games so the refresh worker
+  builds pre-aggs for every tenant.
+- `queryRewrite` is a no-op extension point — drop row/field filters here as
+  the auth DB grows.
+
+**Adding a user**: edit `cube/auth-users.json`, mtime invalidates the in-memory
+cache on the next request — no restart needed. Replace `cube/auth-db.js`
+internals with a real DB query for production; the public signature stays the same.
+
+**Playground** (`http://localhost:4000`) now requires a JWT — paste one minted
+above into the auth field. Dev mode is intentionally off; setting it back to
+`true` bypasses `checkAuth` and breaks tenant routing.
 
 ## Test
 
@@ -145,8 +192,9 @@ Quick benchmark recipes:
 
 When you're past POC and ready to deploy for real:
 
-- Replace `CUBEJS_DEV_MODE=true` with proper JWT auth (`CUBEJS_JWK_URL` or RS256 keys); set `CUBEJS_API_SECRET` from a secret manager.
-- Add `cube.py` (or `cube.js`) with `query_rewrite` for row-level security — e.g., per-team Trino user impersonation, country-based access, PII masking via `access_policies`.
+- HS256 with a file-backed secret is fine for staging; in prod swap `checkAuth` in `cube/cube.js` to verify an upstream JWKS (`CUBEJS_JWK_URL` or RS256 keys) and pull `CUBEJS_API_SECRET` from a secret manager.
+- Replace the file-backed `cube/auth-db.js` with a real DB query against the auth service (Postgres / internal API). Add a TTL cache (e.g., LRU 60 s) to bound lookup cost per request.
+- Extend `queryRewrite` in `cube/cube.js` with concrete RLS — per-team Trino user impersonation, country-based access, PII masking via `access_policies`.
 - Split `cubestore_router` and N `cubestore_worker` replicas; mount `CUBESTORE_REMOTE_DIR` to S3 / GCS instead of a local volume.
 - Run multiple `cube_api` replicas behind a load balancer; one dedicated `cube_refresh_worker` (`CUBEJS_REFRESH_WORKER=true`) for scheduled pre-agg builds.
 - Enable `CUBEJS_ROLLUP_ONLY=true` once pre-aggs cover all production queries — this prevents accidental Trino scans for queries that should hit cache.
