@@ -30,6 +30,22 @@ const GAME_SCHEMA = {
 
 const SUPPORTED_GAMES = Object.keys(GAME_SCHEMA);
 
+// Frontend / external callers occasionally use legacy game ids with a
+// country suffix (e.g. `cfm_vn`, `jus_vn`). We accept those as aliases of
+// the canonical key in GAME_SCHEMA so JWT payloads minted with either form
+// resolve to the same tenant. Aliases never bypass `getUserAccess` —
+// `allowedGames` checks happen against the canonical id post-alias.
+const GAME_ALIASES = {
+  cfm_vn: 'cfm',
+  jus_vn: 'jus',
+  ballistar_vn: 'ballistar',
+};
+
+function canonicalGame(game) {
+  if (!game) return game;
+  return GAME_ALIASES[game] || game;
+}
+
 // Synthetic context used by the scheduled refresh worker. It bypasses the
 // JWT path entirely, so we tag it with a sentinel role that queryRewrite
 // (and future accessPolicy rules) can recognise as "system, not human".
@@ -41,10 +57,10 @@ const REFRESH_ROLE = '__refresh__';
 // minting a JWT for every request. Production runs with dev mode off, so
 // checkAuth always populates securityContext.game and this fallback is unused.
 function gameFor(securityContext) {
-  return (
+  return canonicalGame(
     (securityContext && securityContext.game) ||
-    process.env.CUBEJS_DEFAULT_GAME ||
-    'ballistar'
+      process.env.CUBEJS_DEFAULT_GAME ||
+      'ballistar',
   );
 }
 
@@ -85,14 +101,17 @@ module.exports = {
       if (isDev) { req.securityContext = {}; return; }
       throw new Error('Missing game claim');
     }
-    if (!SUPPORTED_GAMES.includes(payload.game)) {
+    // Normalize legacy aliases (e.g. cfm_vn → cfm) before validation so the
+    // SUPPORTED_GAMES / allowedGames checks all key off canonical ids.
+    const game = canonicalGame(payload.game);
+    if (!SUPPORTED_GAMES.includes(game)) {
       throw new Error(`Unknown game claim: ${payload.game}`);
     }
     const access = await getUserAccess(payload.userId);
-    if (!access.allowedGames.includes(payload.game)) {
+    if (!access.allowedGames.includes(game)) {
       throw new Error(`User ${payload.userId} not allowed for game ${payload.game}`);
     }
-    req.securityContext = buildSecurityContext(payload, access);
+    req.securityContext = buildSecurityContext({ ...payload, game }, access);
   },
 
   // 2. Per-tenant compile cache. Cube keeps one compiled schema per appId,
