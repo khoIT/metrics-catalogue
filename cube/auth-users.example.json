@@ -40,5 +40,12 @@
     "name": "no-access-user",
     "allowedGames": [],
     "roles": []
+  },
+
+  "playground": {
+    "_comment": "Service-account principal for cube-playground. The playground server mints { game, userId: 'playground' } JWTs; this entry lets Cube's getUserAccess() resolve them. Mirror this in auth-users.json or override via CUBE_PLAYGROUND_USER_ID on the playground.",
+    "name": "cube-playground",
+    "allowedGames": ["ballistar", "cfm", "ptg", "jus", "muaw", "pubg"],
+    "roles": ["playground"]
   }
 }
