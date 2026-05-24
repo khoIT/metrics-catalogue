@@ -162,3 +162,21 @@ cubes:
           sql: "SELECT DATE '2024-01-01'"
         build_range_end:
           sql: "SELECT CURRENT_DATE"
+
+      # No-dim baseline so plain "DAU by day" doesn't need the mf_users join
+      # required by the rollup above. HLL sketches merge across granularities,
+      # so weekly / monthly rollups still resolve from the daily partitions.
+      - name: dau_daily
+        type: rollup
+        measures:
+          - dau
+        time_dimension: log_date
+        granularity: day
+        partition_granularity: month
+        refresh_key:
+          every: 1 hour
+          incremental: true
+        build_range_start:
+          sql: "SELECT DATE '2024-01-01'"
+        build_range_end:
+          sql: "SELECT CURRENT_DATE"

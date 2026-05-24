@@ -276,3 +276,31 @@ cubes:
         sql: '{CUBE}.install_date >= CURRENT_DATE - INTERVAL ''7'' DAY'
       - name: paid_install
         sql: '{CUBE}.is_paid_install = TRUE'
+
+    # Cohort-by-install-date rollup. Eliminates the 2–3 minute Presto scans
+    # over mf_users for LTV / cohort queries by pre-aggregating the heavy
+    # sum + HLL columns. paying_users_30d (exact count_distinct) is excluded
+    # on purpose — it can't merge across partitions. Use user_count_approx
+    # plus a separate exact query if you need the precise count.
+    pre_aggregations:
+      - name: ltv_by_install_cohort
+        type: rollup
+        measures:
+          - ltv_total_vnd
+          - ltv_30d_total_vnd
+          - user_count_approx
+        dimensions:
+          - country
+          - media_source
+          - is_paid_install
+          - os_platform
+        time_dimension: install_date
+        granularity: day
+        partition_granularity: month
+        refresh_key:
+          every: 6 hours
+          incremental: true
+        build_range_start:
+          sql: "SELECT DATE '2024-01-01'"
+        build_range_end:
+          sql: "SELECT CURRENT_DATE"
