@@ -17,7 +17,7 @@ cubes:
       WITH first_seen AS (
         SELECT
           user_id,
-          MIN(log_date) AS install_date
+          CAST(MIN(log_date) AS TIMESTAMP) AS install_date
         FROM std_ingame_user_active_daily
         WHERE {FILTER_PARAMS.retention.install_date.filter('log_date')}
         GROUP BY user_id
