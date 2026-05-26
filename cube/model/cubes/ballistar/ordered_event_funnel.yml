@@ -10,6 +10,14 @@
 
 cubes:
   - name: ordered_event_funnel
+    # Link funnel rows to the user master profile so step measures can be
+    # sliced by user attributes (country, os_platform, install cohort).
+    # many_to_one: every funnel row belongs to exactly one user, so grouping
+    # by mf_users dimensions is a safe lookup with no row fan-out.
+    joins:
+      - name: mf_users
+        relationship: many_to_one
+        sql: "{CUBE}.user_id = {mf_users}.user_id"
     sql: |
       WITH events AS (
         SELECT account_id AS user_id, 'login'    AS event_name, login_time   AS ts FROM etl_ingame_login
